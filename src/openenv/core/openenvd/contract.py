@@ -229,7 +229,12 @@ class Zones(_Strict):
         given = data.get("agent")
         if isinstance(given, dict):
             merged = dict(given)
-            merged.setdefault("network", _default_agent_zone().network.model_dump())
+            network = merged.get("network", {})
+            if isinstance(network, dict):
+                merged["network"] = {
+                    **_default_agent_zone().network.model_dump(),
+                    **network,
+                }
             merged.setdefault("containers", {"env": {}})
             data["agent"] = merged
         return data
@@ -316,7 +321,7 @@ def validate_manifest(manifest: Manifest) -> list[str]:
     agent = zones.agent
     if "env" not in agent.containers:
         problems.append("zones.agent: an 'env' container is required")
-    if agent.network.egress == "allowlist" or agent.network.allow:
+    if agent.network.egress != "relays-only" or agent.network.allow:
         problems.append(
             "zones.agent: egress is fixed to relays-only so every call is recorded"
         )

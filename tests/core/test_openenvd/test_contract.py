@@ -21,6 +21,12 @@ def test_partial_agent_zone_keeps_agent_defaults():
     assert m.zones.agent.resources.pids == 10
 
 
+def test_partial_agent_network_keeps_relay_default():
+    m = parse_manifest({"zones": {"agent": {"network": {"model": "openai"}}}})
+    assert m.zones.agent.network.egress == "relays-only"
+    assert m.zones.agent.network.model == "openai"
+
+
 def test_app_and_port_default_to_the_top_level(tmp_path):
     from openenv.core.openenvd.contract import load_manifest
 
@@ -36,6 +42,7 @@ def test_app_and_port_default_to_the_top_level(tmp_path):
     "block, message",
     [
         ({"zones": {"agent": {"network": {"egress": "allowlist"}}}}, "relays-only"),
+        ({"zones": {"agent": {"network": {"egress": "none"}}}}, "relays-only"),
         (
             {"zones": {"agent": {"containers": {"env": {"reads": ["workspace"]}}}}},
             "only observers may declare reads",
