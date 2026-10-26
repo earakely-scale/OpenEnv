@@ -10,13 +10,14 @@ instances share the same Gitea server but have isolated workspaces.
 import atexit
 import json
 import os
+import shlex
 import shutil
 import subprocess
 import tempfile
 import time
 from dataclasses import dataclass
 from pathlib import Path
-from urllib.parse import urlparse
+from urllib.parse import quote, urlparse
 
 
 @dataclass
@@ -100,10 +101,13 @@ class GitServerClient:
         config_dir = Path(tempfile.mkdtemp(prefix="openenv-git-"))
         atexit.register(shutil.rmtree, config_dir, ignore_errors=True)
 
-        # Git credentials
-        git_credentials = (
-            f"http://{self.username}:{self.password}@{self.domain}:{self.port}\n"
-        )
+        # Git credentials. The entry must match the URL git is given (scheme and
+        # host[:port]), and the user name and password must be percent-encoded
+        # so characters such as "@", ":", "/" or "#" do not break the URL.
+        parsed = urlparse(self.gitea_url)
+        user = quote(self.username, safe="")
+        password = quote(self.password, safe="")
+        git_credentials = f"{parsed.scheme}://{user}:{password}@{parsed.netloc}\n"
         gitcreds_path = config_dir / "git-credentials"
         gitcreds_path.write_text(git_credentials)
         gitcreds_path.chmod(0o600)
@@ -355,8 +359,7 @@ class GitServerClient:
         if not work_path.exists():
             return (1, "", f"Working directory does not exist: {work_path}")
 
-        # Split command safely
-        cmd_parts = ["git"] + command.split()
+        cmd_parts = ["git"] + shlex.split(command)
 
         result = subprocess.run(
             cmd_parts,
