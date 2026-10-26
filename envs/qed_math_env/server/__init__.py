@@ -6,7 +6,7 @@
 
 """QED Math Environment server components."""
 
-from typing import TYPE_CHECKING
+from typing import Any, TYPE_CHECKING
 
 if TYPE_CHECKING:
     from .qed_math_environment import QEDMathEnvironment
@@ -14,8 +14,8 @@ if TYPE_CHECKING:
 __all__ = ["QEDMathEnvironment"]
 
 
-def __getattr__(name: str):
-    """Import the environment only when requested, not in verifier workers."""
+def __getattr__(name: str) -> Any:
+    """Load the application only when requested, not when importing a worker."""
     if name == "QEDMathEnvironment":
         from .qed_math_environment import QEDMathEnvironment
 

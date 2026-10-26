@@ -7,7 +7,7 @@
 """QED Math Environment."""
 
 from importlib import import_module
-from typing import TYPE_CHECKING
+from typing import Any, TYPE_CHECKING
 
 if TYPE_CHECKING:
     from .client import QEDMathEnv
@@ -33,8 +33,8 @@ __all__ = [
 ]
 
 
-def __getattr__(name: str):
-    """Keep spawned verifier workers independent of client and model imports."""
+def __getattr__(name: str) -> Any:
+    """Keep client and wire-model imports out of spawned math workers."""
     if name not in __all__:
         raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
     module = import_module(".client" if name == "QEDMathEnv" else ".models", __name__)
