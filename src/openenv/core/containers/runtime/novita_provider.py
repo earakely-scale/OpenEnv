@@ -147,6 +147,9 @@ def _resolve_from_references(content: str) -> str:
     - ``FROM --platform=linux/amd64 python:3.10-slim`` likewise keeps the flag
       as part of the name. Novita builds for its own platform, so the flag is
       dropped rather than propagated.
+
+    Substitutions match whole names in one pass, leaving undeclared names
+    intact even when a declared ARG is a prefix of the reference.
     """
     arg_defaults: Dict[str, str] = {}
     for line in content.split("\n"):
