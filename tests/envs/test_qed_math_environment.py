@@ -1140,19 +1140,18 @@ class TestVerifyAnswerWorker:
 class TestVerifierImports:
     def test_worker_import_does_not_load_environment_dependencies(self):
         # A fresh interpreter follows the same import path as a spawned worker.
+        script = (
+            "import sys; "
+            "import qed_math_env.server.math_verify_service; "
+            "assert 'qed_math_env.client' not in sys.modules; "
+            "assert 'qed_math_env.models' not in sys.modules; "
+            "assert 'qed_math_env.server.qed_math_environment' not in sys.modules; "
+            "assert 'datasets' not in sys.modules; "
+            "assert 'fastmcp' not in sys.modules; "
+            "assert 'openai' not in sys.modules"
+        )
         result = subprocess.run(
-            [
-                sys.executable,
-                "-c",
-                "import sys; "
-                "import qed_math_env.server.math_verify_service; "
-                "assert 'qed_math_env.client' not in sys.modules; "
-                "assert 'qed_math_env.models' not in sys.modules; "
-                "assert 'qed_math_env.server.qed_math_environment' not in sys.modules; "
-                "assert 'datasets' not in sys.modules; "
-                "assert 'fastmcp' not in sys.modules; "
-                "assert 'openai' not in sys.modules",
-            ],
+            [sys.executable, "-c", script],
             cwd=REPO_ROOT,
             capture_output=True,
             text=True,
@@ -1162,8 +1161,8 @@ class TestVerifierImports:
 
     def test_public_exports_preserve_identity(self):
         import qed_math_env
-        import qed_math_env.models as models
         import qed_math_env.server as server
+        from qed_math_env import models
         from qed_math_env.client import QEDMathEnv
 
         for name in qed_math_env.__all__:
