@@ -9,6 +9,7 @@
 from __future__ import annotations
 
 import importlib.util
+import json
 import logging
 import sys
 from pathlib import Path
@@ -17,6 +18,7 @@ from unittest.mock import patch
 import pytest
 from fastapi.testclient import TestClient
 from openenv.cli.__main__ import app
+from openenv.cli.importers.agentenv import detect_agentenv_bundles
 from openenv.cli.importers.base import safe_vendor_dir_name
 from openenv.cli.importers.ors import detect_ors_dependencies, detect_ors_environments
 from openenv.cli.importers.verifiers import detect_verifiers_environments
@@ -213,6 +215,39 @@ def load_environment() -> vf.Environment:
         {"prompt": [{"role": "user", "content": "Say gamma"}], "answer": "gamma", "example_id": 0}
     ]
     return vf.SingleTurnEnv(dataset=train, eval_dataset=eval_rows)
+""".lstrip(),
+        encoding="utf-8",
+    )
+
+
+def _write_agentenv_bundle(root: Path) -> None:
+    (root / "envs" / "echo").mkdir(parents=True)
+    (root / "envs" / "echo" / "server.py").write_text(
+        'raise RuntimeError("should not import")\n', encoding="utf-8"
+    )
+    (root / "tasks").mkdir()
+    steps = [
+        {"id": "env", "type": "deploy_env", "env_id": "echo"},
+        {"id": "policy", "type": "deploy_agent", "agent_name": "policy"},
+        {"id": "play", "type": "prompt_agent", "agent_name": "policy"},
+    ]
+    (root / "tasks" / "ping.json").write_text(json.dumps(steps), encoding="utf-8")
+
+
+def _write_fake_agentenv_sdk(root: Path) -> None:
+    package = root / "agent_env"
+    package.mkdir(parents=True)
+    (package / "__init__.py").write_text("", encoding="utf-8")
+    (package / "openenv.py").write_text(
+        """
+from fastapi import FastAPI
+
+served = []
+
+
+def build_app(bundle):
+    served.append(bundle)
+    return FastAPI()
 """.lstrip(),
         encoding="utf-8",
     )
@@ -846,3 +881,101 @@ def test_imported_server_main_parses_host_and_port(
     importlib.import_module(f"{env_name}.server.app").main()
 
     assert calls == [{"host": "127.0.0.1", "port": 8001}]
+
+
+def test_agentenv_detector_finds_bundles_without_importing_source(
+    tmp_path: Path,
+) -> None:
+    source = tmp_path / "source"
+    _write_agentenv_bundle(source / "bundles" / "desk")
+    _write_agentenv_bundle(source / ".venv" / "bundles" / "installed")
+    (source / "notes" / "tasks").mkdir(parents=True)
+    (source / "notes" / "tasks" / "todo.json").write_text(
+        '{"title": "not a task"}', encoding="utf-8"
+    )
+
+    matches = detect_agentenv_bundles(source)
+
+    assert [(m.source_type, m.class_name, m.module_path) for m in matches] == [
+        ("agentenv", "desk", "bundles/desk")
+    ]
+
+
+def test_import_command_detects_agentenv_bundle_and_generates_server(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    import uvicorn
+
+    source = tmp_path / "echo-desk"
+    _write_agentenv_bundle(source)
+    (source / "requirements.txt").write_text("numpy>=1.26\n", encoding="utf-8")
+    output_dir = tmp_path / "out"
+
+    with patch("openenv.cli.commands.import_env._generate_uv_lock", return_value=True):
+        result = runner.invoke(
+            app,
+            [
+                "import",
+                str(source),
+                "--name",
+                "desk_env",
+                "--output-dir",
+                str(output_dir),
+            ],
+        )
+
+    assert result.exit_code == 0, result.output
+    env_dir = output_dir / "desk_env"
+    bundle = env_dir / "vendor" / "echo-desk"
+    assert (bundle / "tasks" / "ping.json").exists()
+    assert not (env_dir / "server" / "desk_env_environment.py").exists()
+    pyproject = (env_dir / "pyproject.toml").read_text(encoding="utf-8")
+    requirements = (env_dir / "server" / "requirements.txt").read_text(encoding="utf-8")
+    for text in (pyproject, requirements):
+        assert "agentenv-framework>=0.9.1360" in text
+        assert "numpy>=1.26" in text
+    assert 'requires-python = ">=3.11.4"' in pyproject
+    assert "vendor/**/*" in pyproject
+
+    sdk = tmp_path / "sdk"
+    _write_fake_agentenv_sdk(sdk)
+    calls = []
+    monkeypatch.setattr(uvicorn, "run", lambda app, **kwargs: calls.append(kwargs))
+    monkeypatch.setattr(sys, "argv", ["server", "--port", "8001"])
+    sys.path[:0] = [str(sdk), str(output_dir)]
+    try:
+        generated = importlib.import_module("desk_env.server.app")
+        served = importlib.import_module("agent_env.openenv").served
+
+        assert served == [bundle.resolve()]
+        assert TestClient(generated.app).get("/docs").status_code == 200
+        generated.main()
+        assert calls == [{"host": "0.0.0.0", "port": 8001}]
+    finally:
+        sys.path.remove(str(sdk))
+        sys.path.remove(str(output_dir))
+        for name in list(sys.modules):
+            if name.split(".", 1)[0] in {"agent_env", "desk_env"}:
+                sys.modules.pop(name)
+
+
+def test_import_command_requires_env_class_when_multiple_agentenv_bundles(
+    tmp_path: Path,
+) -> None:
+    source = tmp_path / "plugin"
+    _write_agentenv_bundle(source / "bundles" / "train")
+    _write_agentenv_bundle(source / "bundles" / "eval")
+    output_dir = tmp_path / "out"
+    args = ["import", str(source), "--name", "picked_env", "--output-dir"]
+
+    with patch("openenv.cli.commands.import_env._generate_uv_lock", return_value=True):
+        ambiguous = runner.invoke(app, [*args, str(output_dir)])
+        picked = runner.invoke(app, [*args, str(output_dir), "--env-class", "train"])
+
+    assert ambiguous.exit_code != 0
+    assert "Multiple environment entrypoints" in ambiguous.output
+    assert picked.exit_code == 0, picked.output
+    app_source = (output_dir / "picked_env" / "server" / "app.py").read_text(
+        encoding="utf-8"
+    )
+    assert '"vendor" / "plugin/bundles/train"' in app_source

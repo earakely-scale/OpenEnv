@@ -10,8 +10,8 @@ The `openenv` CLI provides a set of commands for building, validating, and pushi
 
 Import a supported third-party source environment into a generated OpenEnv
 wrapper package. The command detects the source format from the directory
-contents, so ORS/OpenReward and Prime Intellect Verifiers sources do not
-require `--type` in the common case.
+contents, so ORS/OpenReward, Prime Intellect Verifiers and AgentEnv sources do
+not require `--type` in the common case.
 
 The generated wrapper vendors the source tree into the package and includes
 vendored files as package data, so non-secret fixture/data files are available to
@@ -25,6 +25,25 @@ wrapper.
 ```bash
 openenv import path/to/source --name my_env --output-dir ./envs
 openenv import path/to/source --name my_env --output-dir ./envs --env-class MyEnv
+```
+
+An [AgentEnv](https://github.com/scaleapi/agentenv-framework) bundle is a folder
+whose `tasks/` holds task files, each a JSON list of steps. The importer finds
+every bundle under the source; when there are several, pick one with
+`--env-class` and the bundle's folder name. The generated `server/app.py` serves
+the vendored bundle with `build_app` from `agentenv-framework`, which the package
+depends on: each session plays one task, `reset(split=..., index=...)` deploys
+the task's environment, the tools are the environment's MCP tools plus
+`end_turn`, and `end_turn` returns the task's score as the reward. The split
+`all` holds every task, and each of the bundle's evals is a split of its own.
+Episodes deploy where agent-env's sandbox configuration says, local Docker by
+default, so the server needs a Docker daemon or a remote sandbox provider. A
+bundle that uses types from an agent-env plugin needs the plugin listed in the
+source's `requirements.txt` or `pyproject.toml`.
+
+```bash
+openenv import path/to/bundle --name my_env --output-dir ./envs
+openenv import path/to/plugin --name my_env --output-dir ./envs --env-class my-bundle
 ```
 
 [[autodoc]] openenv.cli.commands.import_env.import_env

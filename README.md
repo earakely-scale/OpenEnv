@@ -97,7 +97,7 @@ openenv validate my_env --level static --skip-build   # quick check against the 
 openenv push my_env       # deploy it to Hugging Face Spaces
 ```
 
-See [Your First Environment](https://huggingface.co/docs/openenv/guides/first-environment) and [Deploying an Environment](https://huggingface.co/docs/openenv/getting_started/environment-builder). `openenv import` wraps an existing environment from ORS/OpenReward or Verifiers.
+See [Your First Environment](https://huggingface.co/docs/openenv/guides/first-environment) and [Deploying an Environment](https://huggingface.co/docs/openenv/getting_started/environment-builder). `openenv import` wraps an existing environment from ORS/OpenReward or Verifiers, or an AgentEnv bundle.
 
 ## Environments
 

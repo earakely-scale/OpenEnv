@@ -33,7 +33,7 @@ my_env/
 Class names come from the environment name, with a trailing `_env` dropped: `my_env` gives `MyAction`, `MyObservation`, `MyEnvironment` and `MyEnv`. The steps below go through each file. Edit them to replace the echo logic with yours. If you're working inside the OpenEnv repo, move the folder under `envs/`.
 
 > [!TIP]
-> If you already have an ORS/OpenReward or Prime Intellect Verifiers environment, run `openenv import SOURCE --name my_env --output-dir DIR` instead. It detects the source type, vendors the source under the generated package and emits an OpenEnv wrapper with task/split and MCP-style tool actions. Non-secret data files and portable dependencies from the source tree are carried over.
+> If you already have an ORS/OpenReward or Prime Intellect Verifiers environment, or an AgentEnv bundle, run `openenv import SOURCE --name my_env --output-dir DIR` instead. It detects the source type, vendors the source under the generated package and emits an OpenEnv wrapper with task/split and MCP-style tool actions. Non-secret data files and portable dependencies from the source tree are carried over.
 
 ## 2. Define the models
 
