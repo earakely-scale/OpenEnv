@@ -80,9 +80,16 @@ def _with_framework_floor(dependencies: list[str]) -> list[str]:
         except InvalidRequirement:
             continue
         if canonicalize_name(requirement.name) == _FRAMEWORK:
+            if requirement.url is not None:
+                raise ValueError(
+                    f"Cannot verify {_FRAMEWORK}{_FRAMEWORK_FLOOR} from a direct "
+                    "reference. In the bundle's pyproject.toml or requirements.txt, "
+                    "replace the framework direct reference with a version constraint "
+                    f"such as {_FRAMEWORK}[{_FRAMEWORK_EXTRA}]{_FRAMEWORK_FLOOR}, "
+                    "preserving any additional extras and environment marker."
+                )
             requirement.extras.add(_FRAMEWORK_EXTRA)
-            if requirement.url is None:
-                requirement.specifier &= SpecifierSet(_FRAMEWORK_FLOOR)
+            requirement.specifier &= SpecifierSet(_FRAMEWORK_FLOOR)
             dependencies[index] = str(requirement)
             return dependencies
     return [*dependencies, f"{_FRAMEWORK}[{_FRAMEWORK_EXTRA}]{_FRAMEWORK_FLOOR}"]
@@ -105,6 +112,7 @@ class AgentEnvImporter:
         detected: DetectedEnvironment,
     ) -> None:
         bundle = detected.file_path
+        dependencies = _with_framework_floor(collect_source_dependencies(bundle))
         prepare_import_package(bundle, destination, env_name, vendor_dir=bundle.name)
         (destination / "server" / f"{env_name}_environment.py").unlink()
         write_text(
@@ -137,6 +145,6 @@ class AgentEnvImporter:
         append_dependency_files(
             destination,
             env_name,
-            _with_framework_floor(collect_source_dependencies(bundle)),
+            dependencies,
             requires_python=_REQUIRES_PYTHON,
         )

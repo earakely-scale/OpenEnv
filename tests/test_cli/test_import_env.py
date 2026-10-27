@@ -23,6 +23,7 @@ from openenv.cli.importers.base import safe_vendor_dir_name
 from openenv.cli.importers.ors import detect_ors_dependencies, detect_ors_environments
 from openenv.cli.importers.verifiers import detect_verifiers_environments
 from openenv.core.env_server.mcp_types import CallToolAction, ListToolsAction
+from packaging.requirements import Requirement
 from typer.testing import CliRunner
 
 
@@ -964,6 +965,96 @@ def test_import_command_detects_agentenv_bundle_and_generates_server(
         for name in list(sys.modules):
             if name.split(".", 1)[0] in {"agent_env", "desk_env"}:
                 sys.modules.pop(name)
+
+
+@pytest.mark.parametrize("dependency_file", ["requirements.txt", "pyproject.toml"])
+@pytest.mark.parametrize(
+    "dependency",
+    [
+        "agentenv-framework @ https://example.invalid/agentenv_framework-0.9.1000-py3-none-any.whl",
+        "agentenv-framework @ https://example.invalid/agentenv_framework-0.9.1400-py3-none-any.whl",
+        "agentenv-framework @ https://example.invalid/framework.tar.gz",
+        "agentenv-framework @ git+https://example.invalid/framework.git@v0.9.1400",
+        "agentenv-framework @ file:///tmp/agentenv_framework-0.9.1400-py3-none-any.whl",
+        'AgentEnv_Framework[tools] @ https://user:secret@example.invalid/framework.whl ; python_version >= "3.11"',
+    ],
+)
+def test_import_command_rejects_agentenv_direct_references(
+    tmp_path: Path, dependency_file: str, dependency: str
+) -> None:
+    source = tmp_path / "bundle"
+    _write_agentenv_bundle(source)
+    content = (
+        "[project]\ndependencies = " + json.dumps([dependency]) + "\n"
+        if dependency_file == "pyproject.toml"
+        else dependency + "\n"
+    )
+    (source / dependency_file).write_text(content, encoding="utf-8")
+    output_dir = tmp_path / "out"
+
+    with (
+        patch("openenv.cli.commands.import_env._generate_uv_lock") as lock,
+        patch("socket.socket.connect", side_effect=AssertionError("network forbidden")),
+    ):
+        result = runner.invoke(
+            app,
+            ["import", str(source), "--name", "desk_env", "-o", str(output_dir)],
+        )
+
+    assert result.exit_code == 1, result.output
+    assert "Cannot verify agentenv-framework>=0.9.1364" in result.output
+    assert "direct reference" in result.output
+    assert "version constraint" in result.output
+    assert "secret" not in result.output
+    lock.assert_not_called()
+    assert not (output_dir / "desk_env").exists()
+
+
+@pytest.mark.parametrize("dependency_file", ["requirements.txt", "pyproject.toml"])
+@pytest.mark.parametrize("version_range", [">=0.9.1000,<1", ">=0.9.1400"])
+def test_import_command_merges_agentenv_floor_preserving_extras_and_marker(
+    tmp_path: Path, dependency_file: str, version_range: str
+) -> None:
+    import tomllib
+
+    source = tmp_path / "bundle"
+    _write_agentenv_bundle(source)
+    dependency = f'agentenv-framework[tools]{version_range}; python_version >= "3.11"'
+    content = (
+        "[project]\ndependencies = " + json.dumps([dependency]) + "\n"
+        if dependency_file == "pyproject.toml"
+        else dependency + "\n"
+    )
+    (source / dependency_file).write_text(content, encoding="utf-8")
+    output_dir = tmp_path / "out"
+
+    with (
+        patch("openenv.cli.commands.import_env._generate_uv_lock", return_value=True),
+        patch("socket.socket.connect", side_effect=AssertionError("network forbidden")),
+    ):
+        result = runner.invoke(
+            app,
+            ["import", str(source), "--name", "desk_env", "-o", str(output_dir)],
+        )
+
+    assert result.exit_code == 0, result.output
+    env_dir = output_dir / "desk_env"
+    project = tomllib.loads((env_dir / "pyproject.toml").read_text(encoding="utf-8"))
+    requirements = (env_dir / "server" / "requirements.txt").read_text(encoding="utf-8")
+    for dependencies in (project["project"]["dependencies"], requirements.splitlines()):
+        matches = [
+            Requirement(dep) for dep in dependencies if "agentenv-framework" in dep
+        ]
+        assert len(matches) == 1
+        requirement = matches[0]
+        assert requirement.url is None
+        assert requirement.extras == {"tools", "openenv"}
+        assert requirement.marker == Requirement(dependency).marker
+        assert (
+            requirement.specifier
+            == Requirement(f"agentenv-framework{version_range},>=0.9.1364").specifier
+        )
+        assert "0.9.1000" not in requirement.specifier
 
 
 def test_import_command_vendors_only_the_agentenv_bundle_it_picks(
