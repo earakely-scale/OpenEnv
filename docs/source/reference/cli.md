@@ -30,16 +30,24 @@ openenv import path/to/source --name my_env --output-dir ./envs --env-class MyEn
 An [AgentEnv](https://github.com/scaleapi/agentenv-framework) bundle is a folder
 whose `tasks/` holds task files, each a JSON list of steps. The importer finds
 every bundle under the source; when there are several, pick one with
-`--env-class` and the bundle's folder name. The generated `server/app.py` serves
-the vendored bundle with `build_app` from `agentenv-framework`, which the package
-depends on: each session plays one task, `reset(split=..., index=...)` deploys
-the task's environment, the tools are the environment's MCP tools plus
+`--env-class` and the bundle's folder name. Only that folder is vendored, and the
+package's dependencies are the ones the bundle declares in its own
+`requirements.txt` or `pyproject.toml`, plus `agentenv-framework`. Everything the
+bundle's tasks use has to be in the bundle or built into agent-env, so a bundle
+whose environments or verifiers a plugin registers by other means won't serve
+from the package alone.
+
+The generated `server/app.py` serves the bundle with `build_app` from
+`agentenv-framework`: each session plays one task, `reset(split=..., index=...)`
+deploys the task's environment, the tools are the environment's MCP tools plus
 `end_turn`, and `end_turn` returns the task's score as the reward. The split
 `all` holds every task, and each of the bundle's evals is a split of its own.
-Episodes deploy where agent-env's sandbox configuration says, local Docker by
-default, so the server needs a Docker daemon or a remote sandbox provider. A
-bundle that uses types from an agent-env plugin needs the plugin listed in the
-source's `requirements.txt` or `pyproject.toml`.
+
+The server prepares the bundle when it starts, building with the local Docker
+any environment image the bundle defines with a Dockerfile, and deploys each
+episode where agent-env's sandbox configuration says, local Docker by default.
+Run it on a host with Docker. The generated `server/Dockerfile` has no Docker
+inside, so the image it builds can't serve a bundle yet.
 
 ```bash
 openenv import path/to/bundle --name my_env --output-dir ./envs

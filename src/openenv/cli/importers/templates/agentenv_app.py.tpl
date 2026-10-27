@@ -5,7 +5,7 @@ from pathlib import Path
 from agent_env.openenv import build_app
 
 
-BUNDLE = Path(__file__).resolve().parents[1] / "vendor" / "${bundle}"
+BUNDLE = Path(__file__).resolve().parents[1] / "vendor" / ${bundle}
 
 app = build_app(BUNDLE)
 

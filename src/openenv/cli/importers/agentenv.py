@@ -5,6 +5,10 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+from packaging.requirements import InvalidRequirement, Requirement
+from packaging.specifiers import SpecifierSet
+from packaging.utils import canonicalize_name
+
 from .base import (
     append_dependency_files,
     collect_source_dependencies,
@@ -16,7 +20,8 @@ from .base import (
 )
 
 
-_AGENTENV_DEPENDENCY = "agentenv-framework>=0.9.1360"
+_FRAMEWORK = "agentenv-framework"
+_FRAMEWORK_FLOOR = ">=0.9.1360"
 _REQUIRES_PYTHON = ">=3.11.4"
 
 
@@ -58,11 +63,19 @@ def detect_agentenv_bundles(source: Path) -> list[DetectedEnvironment]:
     return matches
 
 
-def _app_source(*, vendor_dir: str, bundle_path: str) -> str:
-    return render_importer_template(
-        "agentenv_app.py.tpl",
-        bundle=f"{vendor_dir}/{bundle_path}" if bundle_path else vendor_dir,
-    )
+def _with_framework_floor(dependencies: list[str]) -> list[str]:
+    """The bundle's dependencies, with agentenv-framework at least the version that serves bundles."""
+    for index, dependency in enumerate(dependencies):
+        try:
+            requirement = Requirement(dependency)
+        except InvalidRequirement:
+            continue
+        if canonicalize_name(requirement.name) == _FRAMEWORK:
+            if requirement.url is None:
+                requirement.specifier &= SpecifierSet(_FRAMEWORK_FLOOR)
+                dependencies[index] = str(requirement)
+            return dependencies
+    return [*dependencies, f"{_FRAMEWORK}{_FRAMEWORK_FLOOR}"]
 
 
 class AgentEnvImporter:
@@ -81,9 +94,8 @@ class AgentEnvImporter:
         env_name: str,
         detected: DetectedEnvironment,
     ) -> None:
-        package = prepare_import_package(
-            source, destination, env_name, vendor_dir=source.name
-        )
+        bundle = detected.file_path
+        prepare_import_package(bundle, destination, env_name, vendor_dir=bundle.name)
         (destination / "server" / f"{env_name}_environment.py").unlink()
         write_text(
             destination / "server" / "__init__.py",
@@ -91,13 +103,13 @@ class AgentEnvImporter:
         )
         write_text(
             destination / "server" / "app.py",
-            _app_source(
-                vendor_dir=package.vendor_dir, bundle_path=detected.module_path
+            render_importer_template(
+                "agentenv_app.py.tpl", bundle=json.dumps(bundle.name)
             ),
         )
-        dependencies = collect_source_dependencies(source)
-        if _AGENTENV_DEPENDENCY not in dependencies:
-            dependencies.append(_AGENTENV_DEPENDENCY)
         append_dependency_files(
-            destination, env_name, dependencies, requires_python=_REQUIRES_PYTHON
+            destination,
+            env_name,
+            _with_framework_floor(collect_source_dependencies(bundle)),
+            requires_python=_REQUIRES_PYTHON,
         )

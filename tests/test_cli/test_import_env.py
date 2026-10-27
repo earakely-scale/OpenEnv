@@ -908,7 +908,9 @@ def test_import_command_detects_agentenv_bundle_and_generates_server(
 
     source = tmp_path / "echo-desk"
     _write_agentenv_bundle(source)
-    (source / "requirements.txt").write_text("numpy>=1.26\n", encoding="utf-8")
+    (source / "requirements.txt").write_text(
+        "numpy>=1.26\nagentenv-framework\n", encoding="utf-8"
+    )
     output_dir = tmp_path / "out"
 
     with patch("openenv.cli.commands.import_env._generate_uv_lock", return_value=True):
@@ -933,6 +935,7 @@ def test_import_command_detects_agentenv_bundle_and_generates_server(
     requirements = (env_dir / "server" / "requirements.txt").read_text(encoding="utf-8")
     for text in (pyproject, requirements):
         assert "agentenv-framework>=0.9.1360" in text
+        assert text.count("agentenv-framework") == 1
         assert "numpy>=1.26" in text
     assert 'requires-python = ">=3.11.4"' in pyproject
     assert "vendor/**/*" in pyproject
@@ -959,12 +962,18 @@ def test_import_command_detects_agentenv_bundle_and_generates_server(
                 sys.modules.pop(name)
 
 
-def test_import_command_requires_env_class_when_multiple_agentenv_bundles(
+def test_import_command_vendors_only_the_agentenv_bundle_it_picks(
     tmp_path: Path,
 ) -> None:
     source = tmp_path / "plugin"
     _write_agentenv_bundle(source / "bundles" / "train")
     _write_agentenv_bundle(source / "bundles" / "eval")
+    (source / "bundles" / "train" / "requirements.txt").write_text(
+        "agentenv-framework>=0.9.1400\nnumpy>=1.26\n", encoding="utf-8"
+    )
+    (source / "requirements.txt").write_text("torch>=2.0\n", encoding="utf-8")
+    (source / ".agentenv").mkdir()
+    (source / ".agentenv" / "config.toml").write_text("[stores]\n", encoding="utf-8")
     output_dir = tmp_path / "out"
     args = ["import", str(source), "--name", "picked_env", "--output-dir"]
 
@@ -975,7 +984,22 @@ def test_import_command_requires_env_class_when_multiple_agentenv_bundles(
     assert ambiguous.exit_code != 0
     assert "Multiple environment entrypoints" in ambiguous.output
     assert picked.exit_code == 0, picked.output
-    app_source = (output_dir / "picked_env" / "server" / "app.py").read_text(
-        encoding="utf-8"
+    env_dir = output_dir / "picked_env"
+    vendored = sorted(
+        path.relative_to(env_dir / "vendor").as_posix()
+        for path in (env_dir / "vendor").rglob("*")
+        if path.is_file()
     )
-    assert '"vendor" / "plugin/bundles/train"' in app_source
+    assert vendored == [
+        "__init__.py",
+        "train/__init__.py",
+        "train/envs/echo/server.py",
+        "train/requirements.txt",
+        "train/tasks/ping.json",
+    ]
+    app_source = (env_dir / "server" / "app.py").read_text(encoding="utf-8")
+    assert '"vendor" / "train"' in app_source
+    requirements = (env_dir / "server" / "requirements.txt").read_text(encoding="utf-8")
+    assert "agentenv-framework>=0.9.1360,>=0.9.1400" in requirements
+    assert "numpy>=1.26" in requirements
+    assert "torch" not in requirements
