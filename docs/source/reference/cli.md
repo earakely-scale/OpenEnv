@@ -35,8 +35,8 @@ default deploys each episode using local Docker. The server needs a Docker CLI
 and a running daemon accessible for image builds and episode containers. The
 generated `server/Dockerfile` does not supply that runtime, so `openenv build`
 and `openenv push` alone do not produce a working deployment. The generated
-README describes local startup and these prerequisites; the generated echo
-client and models are template scaffolding and do not match the delegated API. See
+README describes local startup and these prerequisites. The generated client is
+an `MCPToolClient`, since the served environment takes MCP actions. See
 [AgentEnv's OpenEnv page](https://www.agentenvframework.com/docs/openenv) for
 what it serves and what it needs.
 

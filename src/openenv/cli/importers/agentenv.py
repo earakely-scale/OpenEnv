@@ -23,7 +23,7 @@ from .base import (
 
 _FRAMEWORK = "agentenv-framework"
 _FRAMEWORK_EXTRA = "openenv"
-_FRAMEWORK_VERSION = "0.9.1364"
+_FRAMEWORK_VERSION = "0.9.1366"
 _FRAMEWORK_FLOOR = f">={_FRAMEWORK_VERSION}"
 _ADAPTER_SOURCE = (
     "https://github.com/scaleapi/agentenv-framework/blob/"
@@ -113,8 +113,20 @@ class AgentEnvImporter:
     ) -> None:
         bundle = detected.file_path
         dependencies = _with_framework_floor(collect_source_dependencies(bundle))
-        prepare_import_package(bundle, destination, env_name, vendor_dir=bundle.name)
+        package = prepare_import_package(
+            bundle, destination, env_name, vendor_dir=bundle.name
+        )
+        client = f"{package.class_name_prefix}Env"
         (destination / "server" / f"{env_name}_environment.py").unlink()
+        (destination / "models.py").unlink()
+        for name, template in (
+            ("client.py", "agentenv_client.py.tpl"),
+            ("__init__.py", "agentenv_init.py.tpl"),
+        ):
+            write_text(
+                destination / name,
+                render_importer_template(template, env_name=env_name, client=client),
+            )
         write_text(
             destination / "server" / "__init__.py",
             f'"""{env_name} environment server: an AgentEnv bundle."""\n',
@@ -133,6 +145,7 @@ class AgentEnvImporter:
                 bundle=bundle.name,
                 framework=f"{_FRAMEWORK}[{_FRAMEWORK_EXTRA}]{_FRAMEWORK_FLOOR}",
                 adapter=_ADAPTER_SOURCE,
+                client=client,
             ),
         )
         console.print(
@@ -140,7 +153,7 @@ class AgentEnvImporter:
             "and a running daemon accessible to the server for image builds and episode "
             "containers. The generated server/Dockerfile does not provide this "
             "runtime; openenv build / openenv push alone do not produce a working "
-            "deployment. See README.md for prerequisites and client limitations."
+            "deployment. See README.md for prerequisites."
         )
         append_dependency_files(
             destination,

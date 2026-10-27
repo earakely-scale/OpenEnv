@@ -22,8 +22,11 @@ From this generated package directory, after setting up Docker:
 
 ```bash
 uv sync
-uv run server --host 127.0.0.1 --port 8000
+MAX_CONCURRENT_ENVS=8 uv run server --host 127.0.0.1 --port 8000
 ```
+
+`MAX_CONCURRENT_ENVS` (default 8) caps the concurrent sessions. Each session
+plays its own episode on its own deployment.
 
 The `server` entry point runs `server/app.py`, which passes
 `vendor/${bundle}` to `build_app`. Task selection, splits, tools and rewards
@@ -34,9 +37,25 @@ minimum supported version: [environment.py](${adapter}/environment.py) and
 [AgentEnv's OpenEnv documentation](https://www.agentenvframework.com/docs/openenv)
 for its API and client usage.
 
-`client.py`, `models.py` and the exports in `__init__.py` are echo template
-scaffolding. They do not match the delegated AgentEnv API and must not be used
-as a working client for this server.
+## Client
+
+`client.py` defines `${client}`, an `MCPToolClient`: the served environment
+takes OpenEnv's MCP actions (`ListToolsAction`, `CallToolAction`), which
+`__init__.py` also exports.
+
+```python
+from ${env_name} import ${client}
+
+async with ${client}(base_url="http://127.0.0.1:8000") as env:
+    await env.reset(split="all", index=0)
+    tools = await env.list_tools()
+    ended = await env.call_tool("end_turn", response="Done.")
+    print(ended["done"], ended["reward"])
+```
+
+The tools are the bundle environment's MCP tools plus `end_turn`, which ends
+the turn with its `response`. Its result carries the next turn's prompt, or,
+once `done`, the task's reward. A step before `reset` raises.
 
 ## Deployment limitations
 
@@ -55,4 +74,4 @@ before choosing a deployment host.
 - `server/requirements.txt`: server dependencies.
 - `openenv.yaml`: generated OpenEnv manifest.
 - `server/Dockerfile`: shared image template with the limitation described above.
-- `client.py`, `models.py`, `__init__.py`: echo template scaffolding.
+- `client.py`, `__init__.py`: the client and the MCP action types it sends.

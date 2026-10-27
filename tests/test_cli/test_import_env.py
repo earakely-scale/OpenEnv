@@ -23,6 +23,7 @@ from openenv.cli.importers.base import safe_vendor_dir_name
 from openenv.cli.importers.ors import detect_ors_dependencies, detect_ors_environments
 from openenv.cli.importers.verifiers import detect_verifiers_environments
 from openenv.core.env_server.mcp_types import CallToolAction, ListToolsAction
+from openenv.core.mcp_client import MCPToolClient
 from packaging.requirements import Requirement
 from typer.testing import CliRunner
 
@@ -246,8 +247,8 @@ from fastapi import FastAPI
 served = []
 
 
-def build_app(bundle):
-    served.append(bundle)
+def build_app(bundle, max_concurrent_envs=8):
+    served.append((bundle, max_concurrent_envs))
     return FastAPI()
 """.lstrip(),
         encoding="utf-8",
@@ -939,7 +940,7 @@ def test_import_command_detects_agentenv_bundle_and_generates_server(
     pyproject = (env_dir / "pyproject.toml").read_text(encoding="utf-8")
     requirements = (env_dir / "server" / "requirements.txt").read_text(encoding="utf-8")
     for text in (pyproject, requirements):
-        assert "agentenv-framework[openenv]>=0.9.1364" in text
+        assert "agentenv-framework[openenv]>=0.9.1366" in text
         assert text.count("agentenv-framework") == 1
         assert "numpy>=1.26" in text
     assert 'requires-python = ">=3.11.4"' in pyproject
@@ -950,12 +951,16 @@ def test_import_command_detects_agentenv_bundle_and_generates_server(
     calls = []
     monkeypatch.setattr(uvicorn, "run", lambda app, **kwargs: calls.append(kwargs))
     monkeypatch.setattr(sys, "argv", ["server", "--port", "8001"])
+    monkeypatch.setenv("MAX_CONCURRENT_ENVS", "64")
     sys.path[:0] = [str(sdk), str(output_dir)]
     try:
         generated = importlib.import_module("desk_env.server.app")
         served = importlib.import_module("agent_env.openenv").served
 
-        assert served == [bundle.resolve()]
+        assert served == [(bundle.resolve(), 64)]
+        package = importlib.import_module("desk_env")
+        assert issubclass(package.DeskEnv, MCPToolClient)
+        assert package.__all__ == ["DeskEnv", "CallToolAction", "ListToolsAction"]
         assert TestClient(generated.app).get("/docs").status_code == 200
         generated.main()
         assert calls == [{"host": "0.0.0.0", "port": 8001}]
@@ -1002,7 +1007,7 @@ def test_import_command_rejects_agentenv_direct_references(
         )
 
     assert result.exit_code == 1, result.output
-    assert "Cannot verify agentenv-framework>=0.9.1364" in result.output
+    assert "Cannot verify agentenv-framework>=0.9.1366" in result.output
     assert "direct reference" in result.output
     assert "version constraint" in result.output
     assert "secret" not in result.output
@@ -1052,7 +1057,7 @@ def test_import_command_merges_agentenv_floor_preserving_extras_and_marker(
         assert requirement.marker == Requirement(dependency).marker
         assert (
             requirement.specifier
-            == Requirement(f"agentenv-framework{version_range},>=0.9.1364").specifier
+            == Requirement(f"agentenv-framework{version_range},>=0.9.1366").specifier
         )
         assert "0.9.1000" not in requirement.specifier
 
@@ -1095,7 +1100,7 @@ def test_import_command_vendors_only_the_agentenv_bundle_it_picks(
     app_source = (env_dir / "server" / "app.py").read_text(encoding="utf-8")
     assert '"vendor" / "train"' in app_source
     requirements = (env_dir / "server" / "requirements.txt").read_text(encoding="utf-8")
-    assert "agentenv-framework[openenv]>=0.9.1364,>=0.9.1400" in requirements
+    assert "agentenv-framework[openenv]>=0.9.1366,>=0.9.1400" in requirements
     assert "numpy>=1.26" in requirements
     assert "torch" not in requirements
 
@@ -1142,19 +1147,26 @@ def test_agentenv_generated_readme_matches_paths_and_prerequisites(
     assert "echoed_message" not in readme
 
     project = tomli.loads((env_dir / "pyproject.toml").read_text())["project"]
-    assert "uv sync\nuv run server --host 127.0.0.1 --port 8000" in readme
+    assert (
+        "uv sync\nMAX_CONCURRENT_ENVS=8 uv run server --host 127.0.0.1 --port 8000"
+        in readme
+    )
     assert project["scripts"]["server"] == f"{env_name}.server.app:main"
     assert project["requires-python"] == ">=3.11.4"
     assert "Python >=3.11.4" in readme
-    requirement = "agentenv-framework[openenv]>=0.9.1364"
+    requirement = "agentenv-framework[openenv]>=0.9.1366"
     assert requirement in project["dependencies"]
     assert requirement in (env_dir / "server/requirements.txt").read_text()
     assert requirement in readme
     assert "agent_env.openenv.build_app" in readme
-    adapter = "https://github.com/scaleapi/agentenv-framework/blob/v0.9.1364/src/agent_env/openenv"
+    adapter = "https://github.com/scaleapi/agentenv-framework/blob/v0.9.1366/src/agent_env/openenv"
     assert f"({adapter}/environment.py)" in readme
     assert f"({adapter}/app.py)" in readme
-    assert "do not match the delegated AgentEnv API" in readme
+    client = {"desk_env": "DeskEnv", "picked_env": "PickedEnv"}[env_name]
+    assert f"from {env_name} import {client}" in readme
+    assert f"class {client}(MCPToolClient):" in (env_dir / "client.py").read_text()
+    assert not (env_dir / "models.py").exists()
+    assert "scaffolding" not in readme
     for text in (readme, result.output):
         normalized = " ".join(text.split())
         assert "Docker CLI and a running daemon accessible to the server" in normalized

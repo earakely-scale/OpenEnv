@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 from pathlib import Path
 
 from agent_env.openenv import build_app
@@ -7,7 +8,9 @@ from agent_env.openenv import build_app
 
 BUNDLE = Path(__file__).resolve().parents[1] / "vendor" / ${bundle}
 
-app = build_app(BUNDLE)
+app = build_app(
+    BUNDLE, max_concurrent_envs=int(os.getenv("MAX_CONCURRENT_ENVS", "8"))
+)
 
 
 def main():
