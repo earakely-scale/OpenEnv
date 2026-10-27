@@ -1003,3 +1003,64 @@ def test_import_command_vendors_only_the_agentenv_bundle_it_picks(
     assert "agentenv-framework[openenv]>=0.9.1364,>=0.9.1400" in requirements
     assert "numpy>=1.26" in requirements
     assert "torch" not in requirements
+
+
+@pytest.mark.parametrize(
+    ("bundle_name", "env_name"), [("echo-desk", "desk_env"), ("train", "picked_env")]
+)
+def test_agentenv_generated_readme_matches_paths_and_prerequisites(
+    tmp_path: Path, bundle_name: str, env_name: str
+) -> None:
+    import re
+
+    import tomli
+
+    source = tmp_path / bundle_name
+    _write_agentenv_bundle(source)
+    output_dir = tmp_path / "out"
+    with patch("openenv.cli.commands.import_env._generate_uv_lock", return_value=True):
+        result = runner.invoke(
+            app,
+            [
+                "import",
+                str(source),
+                "--name",
+                env_name,
+                "--output-dir",
+                str(output_dir),
+            ],
+        )
+
+    assert result.exit_code == 0, result.output
+    env_dir = output_dir / env_name
+    readme = (env_dir / "README.md").read_text(encoding="utf-8")
+    # Check the published file inventory against the output, including the bundle
+    # whose name differs from the package and may contain a hyphen.
+    inventory = readme.split("## Generated files\n", 1)[1]
+    paths = re.findall(r"`([^`]+)`", inventory)
+    assert f"vendor/{bundle_name}" in paths
+    assert "server/app.py" in paths
+    for path in paths:
+        assert (env_dir / path).exists(), path
+    assert f"{env_name}_environment.py" not in readme
+    assert "from_docker_image" not in readme
+    assert "echoed_message" not in readme
+
+    project = tomli.loads((env_dir / "pyproject.toml").read_text())["project"]
+    assert "uv sync\nuv run server --host 127.0.0.1 --port 8000" in readme
+    assert project["scripts"]["server"] == f"{env_name}.server.app:main"
+    assert project["requires-python"] == ">=3.11.4"
+    assert "Python >=3.11.4" in readme
+    requirement = "agentenv-framework[openenv]>=0.9.1364"
+    assert requirement in project["dependencies"]
+    assert requirement in (env_dir / "server/requirements.txt").read_text()
+    assert requirement in readme
+    assert "agent_env.openenv.build_app" in readme
+    assert "do not match the delegated AgentEnv API" in readme
+    for text in (readme, result.output):
+        normalized = " ".join(text.split())
+        assert "Docker CLI and a running daemon accessible to the server" in normalized
+        assert "openenv build" in text and "openenv push" in text
+        assert "do not produce a working deployment" in normalized
+    assert "server/Dockerfile" in result.output
+    assert "Warning:" in result.output

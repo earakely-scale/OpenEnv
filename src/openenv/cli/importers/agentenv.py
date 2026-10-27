@@ -9,6 +9,7 @@ from packaging.requirements import InvalidRequirement, Requirement
 from packaging.specifiers import SpecifierSet
 from packaging.utils import canonicalize_name
 
+from .._cli_utils import console
 from .base import (
     append_dependency_files,
     collect_source_dependencies,
@@ -108,6 +109,19 @@ class AgentEnvImporter:
             render_importer_template(
                 "agentenv_app.py.tpl", bundle=json.dumps(bundle.name)
             ),
+        )
+        write_text(
+            destination / "README.md",
+            render_importer_template(
+                "agentenv_README.md.tpl", env_name=env_name, bundle=bundle.name
+            ),
+        )
+        console.print(
+            "[yellow]Warning:[/yellow] AgentEnv requires local Docker: a Docker CLI "
+            "and a running daemon accessible to the server for image builds and episode "
+            "containers. The generated server/Dockerfile does not provide this "
+            "runtime; openenv build / openenv push alone do not produce a working "
+            "deployment. See README.md for prerequisites and client limitations."
         )
         append_dependency_files(
             destination,

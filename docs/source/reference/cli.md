@@ -31,7 +31,12 @@ An [AgentEnv](https://github.com/scaleapi/agentenv-framework) bundle is a folder
 whose `tasks/` holds task files. When a source holds several bundles, pick one
 with `--env-class` and its folder name; only that folder is vendored. The
 generated server runs it with `build_app` from `agentenv-framework`, which by
-default deploys each episode on the local Docker. See
+default deploys each episode using local Docker. The server needs a Docker CLI
+and a running daemon accessible for image builds and episode containers. The
+generated `server/Dockerfile` does not supply that runtime, so `openenv build`
+and `openenv push` alone do not produce a working deployment. The generated
+README describes local startup and these prerequisites; the generated echo
+client and models are template scaffolding and do not match the delegated API. See
 [AgentEnv's OpenEnv page](https://www.agentenvframework.com/docs/openenv) for
 what it serves and what it needs.
 
