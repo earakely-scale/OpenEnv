@@ -21,7 +21,8 @@ from .base import (
 
 
 _FRAMEWORK = "agentenv-framework"
-_FRAMEWORK_FLOOR = ">=0.9.1360"
+_FRAMEWORK_EXTRA = "openenv"
+_FRAMEWORK_FLOOR = ">=0.9.1364"
 _REQUIRES_PYTHON = ">=3.11.4"
 
 
@@ -64,18 +65,19 @@ def detect_agentenv_bundles(source: Path) -> list[DetectedEnvironment]:
 
 
 def _with_framework_floor(dependencies: list[str]) -> list[str]:
-    """The bundle's dependencies, with agentenv-framework at least the version that serves bundles."""
+    """The bundle's dependencies, with agentenv-framework's openenv extra at least the version that serves bundles."""
     for index, dependency in enumerate(dependencies):
         try:
             requirement = Requirement(dependency)
         except InvalidRequirement:
             continue
         if canonicalize_name(requirement.name) == _FRAMEWORK:
+            requirement.extras.add(_FRAMEWORK_EXTRA)
             if requirement.url is None:
                 requirement.specifier &= SpecifierSet(_FRAMEWORK_FLOOR)
-                dependencies[index] = str(requirement)
+            dependencies[index] = str(requirement)
             return dependencies
-    return [*dependencies, f"{_FRAMEWORK}{_FRAMEWORK_FLOOR}"]
+    return [*dependencies, f"{_FRAMEWORK}[{_FRAMEWORK_EXTRA}]{_FRAMEWORK_FLOOR}"]
 
 
 class AgentEnvImporter:

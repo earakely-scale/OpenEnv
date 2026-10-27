@@ -934,7 +934,7 @@ def test_import_command_detects_agentenv_bundle_and_generates_server(
     pyproject = (env_dir / "pyproject.toml").read_text(encoding="utf-8")
     requirements = (env_dir / "server" / "requirements.txt").read_text(encoding="utf-8")
     for text in (pyproject, requirements):
-        assert "agentenv-framework>=0.9.1360" in text
+        assert "agentenv-framework[openenv]>=0.9.1364" in text
         assert text.count("agentenv-framework") == 1
         assert "numpy>=1.26" in text
     assert 'requires-python = ">=3.11.4"' in pyproject
@@ -1000,6 +1000,6 @@ def test_import_command_vendors_only_the_agentenv_bundle_it_picks(
     app_source = (env_dir / "server" / "app.py").read_text(encoding="utf-8")
     assert '"vendor" / "train"' in app_source
     requirements = (env_dir / "server" / "requirements.txt").read_text(encoding="utf-8")
-    assert "agentenv-framework>=0.9.1360,>=0.9.1400" in requirements
+    assert "agentenv-framework[openenv]>=0.9.1364,>=0.9.1400" in requirements
     assert "numpy>=1.26" in requirements
     assert "torch" not in requirements
