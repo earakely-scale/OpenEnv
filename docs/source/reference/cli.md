@@ -28,26 +28,12 @@ openenv import path/to/source --name my_env --output-dir ./envs --env-class MyEn
 ```
 
 An [AgentEnv](https://github.com/scaleapi/agentenv-framework) bundle is a folder
-whose `tasks/` holds task files, each a JSON list of steps. The importer finds
-every bundle under the source; when there are several, pick one with
-`--env-class` and the bundle's folder name. Only that folder is vendored, and the
-package's dependencies are the ones the bundle declares in its own
-`requirements.txt` or `pyproject.toml`, plus `agentenv-framework`. Everything the
-bundle's tasks use has to be in the bundle or built into agent-env, so a bundle
-whose environments or verifiers a plugin registers by other means won't serve
-from the package alone.
-
-The generated `server/app.py` serves the bundle with `build_app` from
-`agentenv-framework`: each session plays one task, `reset(split=..., index=...)`
-deploys the task's environment, the tools are the environment's MCP tools plus
-`end_turn`, and `end_turn` returns the task's score as the reward. The split
-`all` holds every task, and each of the bundle's evals is a split of its own.
-
-The server prepares the bundle when it starts, building with the local Docker
-any environment image the bundle defines with a Dockerfile, and deploys each
-episode where agent-env's sandbox configuration says, local Docker by default.
-Run it on a host with Docker. The generated `server/Dockerfile` has no Docker
-inside, so the image it builds can't serve a bundle yet.
+whose `tasks/` holds task files. When a source holds several bundles, pick one
+with `--env-class` and its folder name; only that folder is vendored. The
+generated server runs it with `build_app` from `agentenv-framework`, which by
+default deploys each episode on the local Docker. See
+[AgentEnv's OpenEnv page](https://www.agentenvframework.com/docs/openenv) for
+what it serves and what it needs.
 
 ```bash
 openenv import path/to/bundle --name my_env --output-dir ./envs
