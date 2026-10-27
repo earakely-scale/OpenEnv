@@ -57,6 +57,11 @@ The tools are the bundle environment's MCP tools plus `end_turn`, which ends
 the turn with its `response`. Its result carries the next turn's prompt, or,
 once `done`, the task's reward. A step before `reset` raises.
 
+`list_tools()` discovers fresh tools by default because tools can change after
+reset, `end_turn`, or a bundle tool call. `get_tool()` and `has_tool()` also use
+fresh discovery. Pass `list_tools(use_cache=True)` explicitly to reuse the last
+discovery result.
+
 ## Deployment limitations
 
 **Warning:** `server/Dockerfile` does not provide the Docker runtime required
