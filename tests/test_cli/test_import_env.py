@@ -893,6 +893,10 @@ def test_agentenv_detector_finds_bundles_without_importing_source(
     (source / "notes" / "tasks" / "todo.json").write_text(
         '{"title": "not a task"}', encoding="utf-8"
     )
+    (source / "jobs" / "tasks").mkdir(parents=True)
+    (source / "jobs" / "tasks" / "queue.json").write_text(
+        '[{"type": "build"}, {"type": "deploy"}]', encoding="utf-8"
+    )
 
     matches = detect_agentenv_bundles(source)
 
@@ -1056,6 +1060,9 @@ def test_agentenv_generated_readme_matches_paths_and_prerequisites(
     assert requirement in (env_dir / "server/requirements.txt").read_text()
     assert requirement in readme
     assert "agent_env.openenv.build_app" in readme
+    adapter = "https://github.com/scaleapi/agentenv-framework/blob/v0.9.1364/src/agent_env/openenv"
+    assert f"({adapter}/environment.py)" in readme
+    assert f"({adapter}/app.py)" in readme
     assert "do not match the delegated AgentEnv API" in readme
     for text in (readme, result.output):
         normalized = " ".join(text.split())

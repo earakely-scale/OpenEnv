@@ -6,7 +6,7 @@ This package serves the vendored `${bundle}` bundle through
 
 ## Prerequisites
 
-- Python >=3.11.4 and `agentenv-framework[openenv]>=0.9.1364` (declared in
+- Python >=3.11.4 and `${framework}` (declared in
   `pyproject.toml` and `server/requirements.txt`).
 - Local Docker: a Docker CLI and a running daemon accessible to the server.
   The delegated server builds the bundle's environment images at startup and
@@ -27,7 +27,10 @@ uv run server --host 127.0.0.1 --port 8000
 
 The `server` entry point runs `server/app.py`, which passes
 `vendor/${bundle}` to `build_app`. Task selection, splits, tools and rewards
-are defined by the bundle and agentenv-framework. Follow
+are defined by the bundle and agentenv-framework. The served environment is
+`agent_env.openenv`'s `AgentEnvEnvironment`; read it, and `build_app`, at the
+minimum supported version: [environment.py](${adapter}/environment.py) and
+[app.py](${adapter}/app.py). Follow
 [AgentEnv's OpenEnv documentation](https://www.agentenvframework.com/docs/openenv)
 for its API and client usage.
 

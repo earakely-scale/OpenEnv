@@ -23,7 +23,12 @@ from .base import (
 
 _FRAMEWORK = "agentenv-framework"
 _FRAMEWORK_EXTRA = "openenv"
-_FRAMEWORK_FLOOR = ">=0.9.1364"
+_FRAMEWORK_VERSION = "0.9.1364"
+_FRAMEWORK_FLOOR = f">={_FRAMEWORK_VERSION}"
+_ADAPTER_SOURCE = (
+    "https://github.com/scaleapi/agentenv-framework/blob/"
+    f"v{_FRAMEWORK_VERSION}/src/agent_env/openenv"
+)
 _REQUIRES_PYTHON = ">=3.11.4"
 
 
@@ -36,7 +41,9 @@ def _is_task_file(path: Path) -> bool:
         isinstance(steps, list)
         and bool(steps)
         and all(
-            isinstance(step, dict) and isinstance(step.get("type"), str)
+            isinstance(step, dict)
+            and isinstance(step.get("id"), str)
+            and isinstance(step.get("type"), str)
             for step in steps
         )
     )
@@ -113,7 +120,11 @@ class AgentEnvImporter:
         write_text(
             destination / "README.md",
             render_importer_template(
-                "agentenv_README.md.tpl", env_name=env_name, bundle=bundle.name
+                "agentenv_README.md.tpl",
+                env_name=env_name,
+                bundle=bundle.name,
+                framework=f"{_FRAMEWORK}[{_FRAMEWORK_EXTRA}]{_FRAMEWORK_FLOOR}",
+                adapter=_ADAPTER_SOURCE,
             ),
         )
         console.print(
